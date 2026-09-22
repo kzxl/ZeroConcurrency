@@ -1,6 +1,6 @@
 # ZeroConcurrency
 
-[![ZeroPlatform Tier](https://img.shields.io/badge/ZeroPlatform-Tier%201%20(Infrastructure%20Engines)-0284c7.svg)](https://github.com/kzxl/ZeroPlatform)
+[![ZeroPlatform Tier](https://img.shields.io/badge/ZeroPlatform-Tier%200%20(Core%20Foundation)-0284c7.svg)](https://github.com/kzxl/ZeroPlatform)
 [![NuGet Version](https://img.shields.io/badge/nuget-v1.2.0-blue.svg)](https://www.nuget.org/packages/ZeroConcurrency/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET Multi-Targeting](https://img.shields.io/badge/.NET-8.0%20%7C%204.6.2%20%7C%20Standard%202.0-purple.svg)](https://dotnet.microsoft.com/)
@@ -118,7 +118,7 @@ ZeroConcurrency/
 
 | Version | Release Date | Key Milestones & Highlights |
 | :--- | :---: | :--- |
-| **`v1.2.0`** | 2026-09-22 | **L1 Concurrency Hardening & Off-Heap Disruptor**:<br/>• Integrated with `ZeroPrimitives.Core 1.3.0` off-heap foundation.<br/>• Added `ZeroNativeRingBuffer`: Off-heap Disruptor RingBuffer managing unmanaged memory blocks with 0 GC overhead.<br/>• Added `AsyncManualResetEvent` & `AsyncAutoResetEvent`: Zero-allocation awaitable synchronization primitives.<br/>• Added `ZeroWorkStealingPool`: Dedicated multi-threaded worker pool with work stealing.<br/>• Verified across 31 automated tests (100% pass rate). |
+| **`v1.2.0`** | 2026-09-22 | **Tier 0 Concurrency Hardening & Off-Heap Disruptor**:<br/>• Integrated with `ZeroPrimitives.Core 1.3.0` off-heap foundation.<br/>• Added `ZeroNativeRingBuffer`: Off-heap Disruptor RingBuffer managing unmanaged memory blocks with 0 GC overhead.<br/>• Added `AsyncManualResetEvent` & `AsyncAutoResetEvent`: Zero-allocation awaitable synchronization primitives.<br/>• Added `ZeroWorkStealingPool`: Dedicated multi-threaded worker pool with work stealing.<br/>• Verified across 31 automated tests (100% pass rate). |
 | **`v1.1.0`** | 2026-09-16 | **MPMC Ring Buffers & Go Channels**:<br/>• Added `ZeroMpmcRingBuffer<T>` lock-free multi-producer multi-consumer ring.<br/>• Added `ZeroChannel<T>` CSP channels with async iterator streaming.<br/>• Added `ZeroDedicatedWorker` pinned thread loop. |
 | **`v1.0.0`** | 2026-09-12 | **Initial Release**:<br/>• `ZeroRingBuffer<T>` SPSC cache-line padded ring.<br/>• `ZeroPromise` & `ZeroPromisePool` reusable ValueTask source.<br/>• `ZeroScheduler` ExecutionContext bypass dispatcher. |
 
