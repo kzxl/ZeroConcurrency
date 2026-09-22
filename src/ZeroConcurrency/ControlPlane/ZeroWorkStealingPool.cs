@@ -46,7 +46,10 @@ namespace ZeroPlatform.Concurrency
             {
                 _queues[i] = new ConcurrentQueue<Action>();
                 _waitHandles[i] = new AutoResetEvent(false);
+            }
 
+            for (int i = 0; i < _workerCount; i++)
+            {
                 int workerIndex = i;
                 _workers[i] = new Thread(() => WorkerLoop(workerIndex))
                 {
