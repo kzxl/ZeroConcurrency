@@ -24,7 +24,7 @@ namespace ZeroPlatform.Concurrency
     public sealed class ZeroChannel<T>
     {
         private readonly ZeroMpmcRingBuffer<T> _buffer;
-        private readonly ConcurrentQueue<ZeroPromise<T>> _waitingReaders = new ConcurrentQueue<ZeroPromise<T>>();
+        private readonly ConcurrentQueue<ZeroPromise<bool>> _waitingReaders = new ConcurrentQueue<ZeroPromise<bool>>();
         private readonly ConcurrentQueue<ZeroPromise<bool>> _waitingWriters = new ConcurrentQueue<ZeroPromise<bool>>();
 
         private volatile bool _isCompleted;
@@ -58,7 +58,7 @@ namespace ZeroPlatform.Concurrency
         /// Attempts to write an item into the channel synchronously without blocking.
         /// </summary>
         /// <param name="item">The item to write.</param>
-        /// <returns><c>true</c> if the item was written or handed off directly to a waiting reader; otherwise <c>false</c>.</returns>
+        /// <returns><c>true</c> if the item was enqueued; otherwise <c>false</c>.</returns>
         public bool TryWrite(T item)
         {
             if (_isCompleted)
@@ -66,18 +66,18 @@ namespace ZeroPlatform.Concurrency
                 throw new ZeroChannelClosedException("Cannot write to a closed channel.", _completionError);
             }
 
-            // Direct handoff to a waiting reader if available
-            while (_waitingReaders.TryDequeue(out var waitingReader))
+            if (_buffer.TryEnqueue(item))
             {
-                if (waitingReader.GetStatus(0) == System.Threading.Tasks.Sources.ValueTaskSourceStatus.Pending)
+                // Signal a waiting reader that data is available
+                while (_waitingReaders.TryDequeue(out var reader))
                 {
-                    waitingReader.SetResult(item);
-                    return true;
+                    reader.SetResult(true);
+                    break;
                 }
+                return true;
             }
 
-            // No pending readers, attempt to enqueue into ring buffer
-            return _buffer.TryEnqueue(item);
+            return false;
         }
 
         /// <summary>
@@ -89,10 +89,11 @@ namespace ZeroPlatform.Concurrency
         {
             if (_buffer.TryDequeue(out item))
             {
-                // Notify waiting writer that a slot has freed up
-                if (_waitingWriters.TryDequeue(out var waitingWriter))
+                // Signal a waiting writer that buffer space has freed up
+                while (_waitingWriters.TryDequeue(out var writer))
                 {
-                    waitingWriter.SetResult(true);
+                    writer.SetResult(true);
+                    break;
                 }
                 return true;
             }
@@ -134,9 +135,6 @@ namespace ZeroPlatform.Concurrency
 
         private async ValueTask SlowWriteAsync(T item, CancellationToken cancellationToken)
         {
-            var promise = ZeroPromisePool<bool>.Rent();
-            _waitingWriters.Enqueue(promise);
-
             while (!cancellationToken.IsCancellationRequested)
             {
                 if (_isCompleted)
@@ -149,9 +147,16 @@ namespace ZeroPlatform.Concurrency
                     return;
                 }
 
-                await promise.Task.ConfigureAwait(false);
-                promise = ZeroPromisePool<bool>.Rent();
+                var promise = ZeroPromisePool<bool>.Rent();
                 _waitingWriters.Enqueue(promise);
+
+                // Double check to prevent lost notification race
+                if (TryWrite(item))
+                {
+                    return;
+                }
+
+                await promise.Task.ConfigureAwait(false);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -181,13 +186,49 @@ namespace ZeroPlatform.Concurrency
 
             if (_isCompleted)
             {
+                if (TryRead(out item))
+                {
+                    return new ValueTask<T>(item);
+                }
                 throw new ZeroChannelClosedException("Channel is closed and empty.", _completionError);
             }
 
             // Slow path: register promise and await incoming data
-            var promise = ZeroPromisePool<T>.Rent();
-            _waitingReaders.Enqueue(promise);
-            return promise.Task;
+            return SlowReadAsync(cancellationToken);
+        }
+
+        private async ValueTask<T> SlowReadAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (TryRead(out var item))
+                {
+                    return item;
+                }
+
+                if (_isCompleted)
+                {
+                    if (TryRead(out item))
+                    {
+                        return item;
+                    }
+                    throw new ZeroChannelClosedException("Channel is closed and empty.", _completionError);
+                }
+
+                var promise = ZeroPromisePool<bool>.Rent();
+                _waitingReaders.Enqueue(promise);
+
+                // Double check to prevent lost notification race
+                if (TryRead(out item))
+                {
+                    return item;
+                }
+
+                await promise.Task.ConfigureAwait(false);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            return default!;
         }
 
         /// <summary>
@@ -202,17 +243,13 @@ namespace ZeroPlatform.Concurrency
                 if (!_buffer.IsEmpty) return true;
                 if (_isCompleted) return !_buffer.IsEmpty;
 
-                try
-                {
-                    var item = await ReadAsync(cancellationToken).ConfigureAwait(false);
-                    // Push back to buffer for subsequent TryRead consumption
-                    _buffer.TryEnqueue(item);
-                    return true;
-                }
-                catch (ZeroChannelClosedException)
-                {
-                    return false;
-                }
+                var promise = ZeroPromisePool<bool>.Rent();
+                _waitingReaders.Enqueue(promise);
+
+                if (!_buffer.IsEmpty) return true;
+                if (_isCompleted) return !_buffer.IsEmpty;
+
+                await promise.Task.ConfigureAwait(false);
             }
 
             return false;
@@ -251,20 +288,17 @@ namespace ZeroPlatform.Concurrency
             _completionError = error;
             _isCompleted = true;
 
-            // Wake up waiting writers
+            // Wake up waiting writers with closed error
             while (_waitingWriters.TryDequeue(out var writer))
             {
                 if (error != null) writer.SetException(error);
-                else writer.SetResult(false);
+                else writer.SetException(new ZeroChannelClosedException("Channel has been closed."));
             }
 
-            // If buffer is empty, wake up all waiting readers with closed exception
-            if (_buffer.IsEmpty)
+            // Wake up waiting readers so they can check buffer or finish
+            while (_waitingReaders.TryDequeue(out var reader))
             {
-                while (_waitingReaders.TryDequeue(out var reader))
-                {
-                    reader.SetException(error ?? new ZeroChannelClosedException("Channel has been closed."));
-                }
+                reader.SetResult(true);
             }
         }
     }
