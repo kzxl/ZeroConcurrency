@@ -9,18 +9,21 @@ namespace ZeroPlatform.Concurrency
 {
     /// <summary>
     /// Reusable <see cref="IValueTaskSource{T}"/> implementation that eliminates GC allocations for asynchronous completions.
-    /// Automatically resets and returns to <see cref="ZeroPromisePool{T}"/> immediately after the awaiter consumes the result.
+    /// Equipped with thread-safe single-transition guards (<see cref="TrySetResult"/>, <see cref="TrySetException"/>)
+    /// to safely handle concurrent completions, cancellations, and race conditions.
     /// </summary>
     /// <typeparam name="T">The result type.</typeparam>
     public sealed class ZeroPromise<T> : IValueTaskSource<T>, IValueTaskSource
     {
         private ManualResetValueTaskSourceCore<T> _core;
         private readonly Action<ZeroPromise<T>>? _returnToPool;
+        private int _completedState; // 0 = pending, 1 = completed
 
         internal ZeroPromise(Action<ZeroPromise<T>>? returnToPool = null)
         {
             _returnToPool = returnToPool;
             _core.RunContinuationsAsynchronously = true; // Prevent stack overflows on long continuation chains
+            _completedState = 0;
         }
 
         /// <summary>
@@ -31,20 +34,51 @@ namespace ZeroPlatform.Concurrency
         /// <summary>
         /// Transitions the promise to a completed state with the specified result.
         /// </summary>
-        /// <param name="result">The result value.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetResult(T result)
         {
-            _core.SetResult(result);
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetResult(result);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to transition the promise to a completed state. Returns true if this call completed it.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TrySetResult(T result)
+        {
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetResult(result);
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
         /// Transitions the promise to a faulted state with the specified exception.
         /// </summary>
-        /// <param name="exception">The exception.</param>
         public void SetException(Exception exception)
         {
-            _core.SetException(exception);
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetException(exception);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to transition the promise to a faulted state. Returns true if this call faulted it.
+        /// </summary>
+        public bool TrySetException(Exception exception)
+        {
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetException(exception);
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -71,6 +105,7 @@ namespace ZeroPlatform.Concurrency
             }
             finally
             {
+                _completedState = 0;
                 _core.Reset();
                 _returnToPool?.Invoke(this);
             }
@@ -86,11 +121,13 @@ namespace ZeroPlatform.Concurrency
     {
         private ManualResetValueTaskSourceCore<bool> _core;
         private readonly Action<ZeroPromise>? _returnToPool;
+        private int _completedState;
 
         internal ZeroPromise(Action<ZeroPromise>? returnToPool = null)
         {
             _returnToPool = returnToPool;
             _core.RunContinuationsAsynchronously = true;
+            _completedState = 0;
         }
 
         /// <summary>
@@ -102,12 +139,51 @@ namespace ZeroPlatform.Concurrency
         /// Transitions the promise to a completed state.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetResult() => _core.SetResult(true);
+        public void SetResult()
+        {
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetResult(true);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to transition the promise to a completed state.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TrySetResult()
+        {
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetResult(true);
+                return true;
+            }
+            return false;
+        }
 
         /// <summary>
         /// Transitions the promise to a faulted state with an exception.
         /// </summary>
-        public void SetException(Exception exception) => _core.SetException(exception);
+        public void SetException(Exception exception)
+        {
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetException(exception);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to transition the promise to a faulted state.
+        /// </summary>
+        public bool TrySetException(Exception exception)
+        {
+            if (Interlocked.CompareExchange(ref _completedState, 1, 0) == 0)
+            {
+                _core.SetException(exception);
+                return true;
+            }
+            return false;
+        }
 
         /// <summary>
         /// Gets the current status of the operation.
@@ -133,6 +209,7 @@ namespace ZeroPlatform.Concurrency
             }
             finally
             {
+                _completedState = 0;
                 _core.Reset();
                 _returnToPool?.Invoke(this);
             }
@@ -154,7 +231,6 @@ namespace ZeroPlatform.Concurrency
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ZeroPromise<T> Rent()
         {
-            // Fast path: atomically claim the cached item without queue contention
             var fast = Interlocked.Exchange(ref s_fastItem, null);
             if (fast != null)
             {
@@ -172,7 +248,6 @@ namespace ZeroPlatform.Concurrency
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void Return(ZeroPromise<T> promise)
         {
-            // Fast path: store into fast slot if available; otherwise spill over to queue
             if (Interlocked.CompareExchange(ref s_fastItem, promise, null) != null)
             {
                 s_pool.Enqueue(promise);
