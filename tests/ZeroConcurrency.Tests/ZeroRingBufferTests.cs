@@ -115,5 +115,22 @@ namespace ZeroPlatform.Concurrency.Tests
             Assert.Equal(expectedSum, receivedSum);
             Assert.True(ring.IsEmpty);
         }
+
+        [Fact]
+        public void Batch_EnqueueAndDequeue_TransfersCorrectly()
+        {
+            var ring = new ZeroRingBuffer<int>(16);
+            int[] data = [1, 2, 3, 4, 5];
+
+            int enqueued = ring.TryEnqueueBatch(data);
+            Assert.Equal(5, enqueued);
+            Assert.Equal(5, ring.Count);
+
+            int[] output = new int[5];
+            int dequeued = ring.TryDequeueBatch(output);
+            Assert.Equal(5, dequeued);
+            Assert.Equal(data, output);
+            Assert.True(ring.IsEmpty);
+        }
     }
 }
