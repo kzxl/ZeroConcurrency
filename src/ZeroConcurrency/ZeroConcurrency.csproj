@@ -4,9 +4,9 @@
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <Authors>Phong Võ (kzxl)</Authors>
     <Company>ZeroUniverse</Company>
     <Description>Pure C# ultra-fast, zero-allocation lock-free concurrency primitives, cache-line padded SPSC/MPMC ring buffers, execution-context bypassing schedulers, zero-allocation pooled ValueTask sources, and Go-like CSP channels for high-throughput .NET applications.</Description>
