@@ -4,9 +4,9 @@
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
-    <Version>1.1.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
     <Authors>Phong Võ (kzxl)</Authors>
     <Company>ZeroUniverse</Company>
     <Description>Pure C# ultra-fast, zero-allocation lock-free concurrency primitives, cache-line padded SPSC/MPMC ring buffers, execution-context bypassing schedulers, zero-allocation pooled ValueTask sources, and Go-like CSP channels for high-throughput .NET applications.</Description>
@@ -18,6 +18,10 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <NoWarn>$(NoWarn);CS0169</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ZeroPrimitives.Core" Version="1.3.0" />
+  </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' Or '$(TargetFramework)' == 'net462'">
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.4" />
