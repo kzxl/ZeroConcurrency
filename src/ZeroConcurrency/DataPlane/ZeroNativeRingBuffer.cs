@@ -1,10 +1,18 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using ZeroPrimitives.Memory;
 
 namespace ZeroPlatform.Concurrency
 {
+    [StructLayout(LayoutKind.Explicit, Size = 128)]
+    internal struct NativeRingBufferSlot
+    {
+        [FieldOffset(64)]
+        public long Value;
+    }
+
     /// <summary>
     /// Represents a high-throughput off-heap Disruptor RingBuffer engineered for unmanaged memory frames.
     /// Manages pooled off-heap <see cref="NativeMemoryBlock"/> instances directly inside cache-line padded slots.
@@ -17,11 +25,9 @@ namespace ZeroPlatform.Concurrency
         private readonly NativeMemoryPool _pool;
         private readonly bool _ownsPool;
 
-        // Cache-line padded sequence pointers to eliminate false sharing (64 bytes)
-        private long _writeHead;
-        private long _pad1, _pad2, _pad3, _pad4, _pad5, _pad6, _pad7;
-        private long _readTail;
-        private long _pad8, _pad9, _pad10, _pad11, _pad12, _pad13, _pad14;
+        // Physical 128-byte cache-line isolation preventing false sharing across all CLRs
+        private NativeRingBufferSlot _writeHead;
+        private NativeRingBufferSlot _readTail;
         private int _disposed;
 
         /// <summary>
@@ -36,8 +42,8 @@ namespace ZeroPlatform.Concurrency
         {
             get
             {
-                long write = Volatile.Read(ref _writeHead);
-                long read = Volatile.Read(ref _readTail);
+                long write = Volatile.Read(ref _writeHead.Value);
+                long read = Volatile.Read(ref _readTail.Value);
                 long diff = write - read;
                 return diff < 0 ? 0 : (diff > _capacity ? _capacity : (int)diff);
             }
@@ -82,8 +88,8 @@ namespace ZeroPlatform.Concurrency
         {
             ThrowIfDisposed();
 
-            long write = Volatile.Read(ref _writeHead);
-            long read = Volatile.Read(ref _readTail);
+            long write = Volatile.Read(ref _writeHead.Value);
+            long read = Volatile.Read(ref _readTail.Value);
 
             if (write - read >= _capacity)
                 return false; // Buffer full
@@ -96,7 +102,31 @@ namespace ZeroPlatform.Concurrency
             _slots[index] = block;
 
             // Advance write head atomically
-            Volatile.Write(ref _writeHead, write + 1);
+            Volatile.Write(ref _writeHead.Value, write + 1);
+            return true;
+        }
+
+        /// <summary>
+        /// Attempts to peek the size of the next payload in the ring buffer without consuming it.
+        /// Thread-safe for a single reader.
+        /// </summary>
+        public bool TryPeek(out int payloadLength)
+        {
+            ThrowIfDisposed();
+            payloadLength = 0;
+
+            long read = Volatile.Read(ref _readTail.Value);
+            long write = Volatile.Read(ref _writeHead.Value);
+
+            if (read >= write)
+                return false; // Buffer empty
+
+            int index = (int)(read & _mask);
+            NativeMemoryBlock? block = _slots[index];
+            if (block == null)
+                return false;
+
+            payloadLength = block.Length;
             return true;
         }
 
@@ -110,8 +140,8 @@ namespace ZeroPlatform.Concurrency
             ThrowIfDisposed();
             bytesRead = 0;
 
-            long read = Volatile.Read(ref _readTail);
-            long write = Volatile.Read(ref _writeHead);
+            long read = Volatile.Read(ref _readTail.Value);
+            long write = Volatile.Read(ref _writeHead.Value);
 
             if (read >= write)
                 return false; // Buffer empty
@@ -123,7 +153,9 @@ namespace ZeroPlatform.Concurrency
                 return false;
 
             if (destination.Length < block.Length)
-                return false; // Destination buffer too small
+            {
+                throw new ArgumentException($"Destination buffer size ({destination.Length} bytes) is smaller than payload block length ({block.Length} bytes).", nameof(destination));
+            }
 
             block.Span.CopyTo(destination);
             bytesRead = block.Length;
@@ -133,7 +165,7 @@ namespace ZeroPlatform.Concurrency
             _slots[index] = null;
 
             // Advance read tail atomically
-            Volatile.Write(ref _readTail, read + 1);
+            Volatile.Write(ref _readTail.Value, read + 1);
             return true;
         }
 

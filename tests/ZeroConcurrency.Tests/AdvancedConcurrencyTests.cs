@@ -137,5 +137,69 @@ namespace ZeroConcurrency.Tests
             Assert.True(ring.TryWrite(data));
             Assert.Equal(4, ring.Count);
         }
+
+        [Fact]
+        public void ZeroNativeRingBuffer_TryRead_UndersizedDestination_ThrowsArgumentExceptionWithoutStalling()
+        {
+            using var ring = new ZeroNativeRingBuffer(capacityPowerOfTwo: 8);
+            byte[] data = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+            Assert.True(ring.TryWrite(data));
+
+            // Verify TryPeek correctly identifies payload length
+            Assert.True(ring.TryPeek(out int peekLength));
+            Assert.Equal(8, peekLength);
+
+            // Destination buffer too small: must throw ArgumentException rather than stalling/deadlocking
+            byte[] tooSmall = new byte[4];
+            Assert.Throws<ArgumentException>(() => ring.TryRead(tooSmall.AsSpan(), out _));
+
+            // Ring buffer must preserve the unconsumed item
+            Assert.Equal(1, ring.Count);
+
+            // Reading with adequate buffer must succeed cleanly
+            byte[] adequate = new byte[8];
+            Assert.True(ring.TryRead(adequate.AsSpan(), out int bytesRead));
+            Assert.Equal(8, bytesRead);
+            for (int i = 0; i < 8; i++)
+            {
+                Assert.Equal(data[i], adequate[i]);
+            }
+            Assert.Equal(0, ring.Count);
+        }
+
+        [Fact]
+        public async Task ZeroNativeRingBuffer_ConcurrentProducerConsumer_Succeeds()
+        {
+            using var ring = new ZeroNativeRingBuffer(capacityPowerOfTwo: 64);
+            const int totalItems = 2000;
+            var produceTask = System.Threading.Tasks.Task.Run(() =>
+            {
+                for (int i = 0; i < totalItems; i++)
+                {
+                    byte[] payload = BitConverter.GetBytes(i);
+                    while (!ring.TryWrite(payload))
+                    {
+                        System.Threading.Thread.Yield();
+                    }
+                }
+            });
+
+            var consumeTask = System.Threading.Tasks.Task.Run(() =>
+            {
+                byte[] buffer = new byte[8];
+                for (int i = 0; i < totalItems; i++)
+                {
+                    while (!ring.TryRead(buffer.AsSpan(), out int bytesRead))
+                    {
+                        System.Threading.Thread.Yield();
+                    }
+                    int value = BitConverter.ToInt32(buffer, 0);
+                    Assert.Equal(i, value);
+                }
+            });
+
+            await System.Threading.Tasks.Task.WhenAll(produceTask, consumeTask);
+            Assert.Equal(0, ring.Count);
+        }
     }
 }
