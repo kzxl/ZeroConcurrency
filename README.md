@@ -1,10 +1,10 @@
 # ZeroConcurrency
 
 [![ZeroPlatform Tier](https://img.shields.io/badge/ZeroPlatform-Tier%200%20(Core%20Foundation)-0284c7.svg)](https://github.com/kzxl/ZeroPlatform)
-[![NuGet Version](https://img.shields.io/badge/nuget-v1.2.0-blue.svg)](https://www.nuget.org/packages/ZeroConcurrency/)
+[![NuGet Version](https://img.shields.io/badge/nuget-v1.2.1-blue.svg)](https://www.nuget.org/packages/ZeroConcurrency/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET Multi-Targeting](https://img.shields.io/badge/.NET-8.0%20%7C%204.6.2%20%7C%20Standard%202.0-purple.svg)](https://dotnet.microsoft.com/)
-[![Tests: 31 Passed](https://img.shields.io/badge/Tests-31%20Passed%20(100%25)-brightgreen.svg)]()
+[![Tests: 66 Passed](https://img.shields.io/badge/Tests-66%20Passed%20(100%25)-brightgreen.svg)]()
 [![Zero External Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20C%23)-brightgreen.svg)]()
 
 **ZeroConcurrency** is an enterprise-grade, pure C# lock-free concurrency, high-throughput streaming, and asynchronous execution engine for .NET. Engineered with **zero external unmanaged dependencies**, it delivers micro-to-nanosecond latency, zero GC allocations for steady-state workloads, and execution context bypass for mission-critical industrial automation, SCADA, edge IoT, and streaming pipelines.
