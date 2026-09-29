@@ -1,10 +1,10 @@
 # ZeroConcurrency
 
 [![ZeroPlatform Tier](https://img.shields.io/badge/ZeroPlatform-Tier%200%20(Core%20Foundation)-0284c7.svg)](https://github.com/kzxl/ZeroPlatform)
-[![NuGet Version](https://img.shields.io/badge/nuget-v1.2.1-blue.svg)](https://www.nuget.org/packages/ZeroConcurrency/)
+[![NuGet Version](https://img.shields.io/badge/nuget-v1.4.0-blue.svg)](https://www.nuget.org/packages/ZeroConcurrency/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET Multi-Targeting](https://img.shields.io/badge/.NET-8.0%20%7C%204.6.2%20%7C%20Standard%202.0-purple.svg)](https://dotnet.microsoft.com/)
-[![Tests: 66 Passed](https://img.shields.io/badge/Tests-66%20Passed%20(100%25)-brightgreen.svg)]()
+[![Tests: 76 Passed](https://img.shields.io/badge/Tests-76%20Passed%20(100%25)-brightgreen.svg)]()
 [![Zero External Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20C%23)-brightgreen.svg)]()
 
 **ZeroConcurrency** is an enterprise-grade, pure C# lock-free concurrency, high-throughput streaming, and asynchronous execution engine for .NET. Engineered with **zero external unmanaged dependencies**, it delivers micro-to-nanosecond latency, zero GC allocations for steady-state workloads, and execution context bypass for mission-critical industrial automation, SCADA, edge IoT, and streaming pipelines.
@@ -16,6 +16,10 @@ Part of the **ZeroUniverse / ZeroPlatform** ecosystem.
 ## Key Capabilities
 
 ### 1. Data-Plane: Lock-Free Ring Buffers & Off-Heap Disruptors
+- **`ZeroMmfMpmcQueue<T>` (Memory-Mapped File Disruptor)**:
+  - Cross-process and high-volume lock-free Multi-Producer Multi-Consumer ring queue backed by OS `MemoryMappedFile`.
+  - Employs monotonic sequence barriers with Vyukov-style slot state tracking for contention mitigation and ABA protection.
+  - Zero heap GC allocations; facilitates blazing-fast inter-process communication (IPC) and crash-resilient telemetry streaming.
 - **`ZeroNativeRingBuffer` (Off-Heap Disruptor)**:
   - High-speed Disruptor-style ring buffer storing unmanaged payloads directly in off-heap memory backed by `ZeroPrimitives.Memory.NativeMemoryPool`.
   - Zero managed heap wrapping overhead; ideal for sensor data and camera frames between threads.
@@ -107,6 +111,7 @@ ZeroConcurrency/
 │   ├── ZeroPromise.cs            # Reusable IValueTaskSource & pool
 │   └── ZeroScheduler.cs          # ExecutionContext bypass scheduler
 └── DataPlane/
+    ├── ZeroMmfMpmcQueue.cs       # MemoryMappedFile MPMC Disruptor Queue
     ├── ZeroNativeRingBuffer.cs   # Off-heap Disruptor RingBuffer backed by NativeMemoryPool
     ├── ZeroMpmcRingBuffer.cs     # Lock-free MPMC queue
     └── ZeroRingBuffer.cs         # Lock-free SPSC cache-line padded ring
@@ -118,6 +123,7 @@ ZeroConcurrency/
 
 | Version | Release Date | Key Milestones & Highlights |
 | :--- | :---: | :--- |
+| **`v1.4.0`** | 2026-09-29 | **Durable Lock-Free Disruptor & Cross-Process IPC MPMC**:<br/>• Added `ZeroMmfMpmcQueue<T>`: Lock-free high-throughput Multi-Producer Multi-Consumer queue backed by Memory-Mapped Files (MMF).<br/>• Monotonic sequence barriers for contention mitigation, cache-line aligned structures, and zero GC allocation streaming.<br/>• 76 unit tests passing (100% success rate). |
 | **`v1.2.0`** | 2026-09-22 | **Tier 0 Concurrency Hardening & Off-Heap Disruptor**:<br/>• Integrated with `ZeroPrimitives.Core 1.3.0` off-heap foundation.<br/>• Added `ZeroNativeRingBuffer`: Off-heap Disruptor RingBuffer managing unmanaged memory blocks with 0 GC overhead.<br/>• Added `AsyncManualResetEvent` & `AsyncAutoResetEvent`: Zero-allocation awaitable synchronization primitives.<br/>• Added `ZeroWorkStealingPool`: Dedicated multi-threaded worker pool with work stealing.<br/>• Verified across 31 automated tests (100% pass rate). |
 | **`v1.1.0`** | 2026-09-16 | **MPMC Ring Buffers & Go Channels**:<br/>• Added `ZeroMpmcRingBuffer<T>` lock-free multi-producer multi-consumer ring.<br/>• Added `ZeroChannel<T>` CSP channels with async iterator streaming.<br/>• Added `ZeroDedicatedWorker` pinned thread loop. |
 | **`v1.0.0`** | 2026-09-12 | **Initial Release**:<br/>• `ZeroRingBuffer<T>` SPSC cache-line padded ring.<br/>• `ZeroPromise` & `ZeroPromisePool` reusable ValueTask source.<br/>• `ZeroScheduler` ExecutionContext bypass dispatcher. |
