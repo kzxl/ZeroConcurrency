@@ -132,5 +132,34 @@ namespace ZeroPlatform.Concurrency.Tests
             Assert.Equal(data, output);
             Assert.True(ring.IsEmpty);
         }
+
+        [Fact]
+        public void Wraparound_NearIntMaxValue_EnqueuesAndDequeuesAccurately()
+        {
+            var ring = new ZeroRingBuffer<int>(64);
+            var tailField = typeof(ZeroRingBufferProducer<int>).GetField("_tail", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var headField = typeof(ZeroRingBuffer<int>).GetField("_head", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cachedHeadField = typeof(ZeroRingBufferProducer<int>).GetField("_cachedHead", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cachedTailField = typeof(ZeroRingBuffer<int>).GetField("_cachedTail", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            int nearMax = int.MaxValue - 10;
+            tailField!.SetValue(ring, nearMax);
+            headField!.SetValue(ring, nearMax);
+            cachedHeadField!.SetValue(ring, nearMax);
+            cachedTailField!.SetValue(ring, nearMax);
+
+            for (int i = 0; i < 20; i++)
+            {
+                Assert.True(ring.TryEnqueue(i), $"Enqueue failed at {i}");
+            }
+
+            for (int i = 0; i < 20; i++)
+            {
+                Assert.True(ring.TryDequeue(out int val), $"Dequeue failed at {i}");
+                Assert.Equal(i, val);
+            }
+
+            Assert.True(ring.IsEmpty);
+        }
     }
 }

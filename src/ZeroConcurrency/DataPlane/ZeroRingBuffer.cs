@@ -134,12 +134,12 @@ namespace ZeroPlatform.Concurrency
         {
             int currentHead = _head;
 
-            // Fast path: check against local cached tail
-            if (currentHead >= _cachedTail)
+            // Fast path: check against local cached tail (difference preserves distance across wraparound)
+            if ((_cachedTail - currentHead) <= 0)
             {
                 // Slow path: update cached tail from producer's memory
                 _cachedTail = Volatile.Read(ref _tail);
-                if (currentHead >= _cachedTail)
+                if ((_cachedTail - currentHead) <= 0)
                 {
                     item = default!;
                     return false; // Buffer is genuinely empty
@@ -231,10 +231,10 @@ namespace ZeroPlatform.Concurrency
         public bool TryPeek(out T item)
         {
             int currentHead = _head;
-            if (currentHead >= _cachedTail)
+            if ((_cachedTail - currentHead) <= 0)
             {
                 _cachedTail = Volatile.Read(ref _tail);
-                if (currentHead >= _cachedTail)
+                if ((_cachedTail - currentHead) <= 0)
                 {
                     item = default!;
                     return false;
