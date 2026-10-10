@@ -417,14 +417,11 @@ namespace ZeroPlatform.Concurrency
                     else writer.SetException(new ZeroChannelClosedException("Channel has been closed."));
                 }
 
-                // If buffer is empty, wake up all waiting readers with closed exception
-                if (_buffer.IsEmpty)
+                // Wake up all waiting readers with closed exception
+                while (_waitingReaders.Count > 0)
                 {
-                    while (_waitingReaders.Count > 0)
-                    {
-                        var reader = _waitingReaders.Dequeue();
-                        reader.SetException(error ?? new ZeroChannelClosedException("Channel has been closed."));
-                    }
+                    var reader = _waitingReaders.Dequeue();
+                    reader.SetException(error ?? new ZeroChannelClosedException("Channel has been closed."));
                 }
             }
         }
