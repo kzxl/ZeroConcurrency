@@ -46,12 +46,63 @@ namespace ZeroPlatform.Concurrency
 #if NETCOREAPP || NET8_0_OR_GREATER
             ThreadPool.UnsafeQueueUserWorkItem(action, state, preferLocal: true);
 #else
-            ThreadPool.UnsafeQueueUserWorkItem(static s =>
-            {
-                var tuple = (Tuple<Action<TState>, TState>)s!;
-                tuple.Item1(tuple.Item2);
-            }, Tuple.Create(action, state));
+            var item = ActionWorkItemPool<TState>.Rent(action, state);
+            ThreadPool.UnsafeQueueUserWorkItem(ActionWorkItem<TState>.Callback, item);
 #endif
         }
+
+#if !NETCOREAPP && !NET8_0_OR_GREATER
+        private sealed class ActionWorkItem<TState>
+        {
+            public Action<TState>? Action;
+            public TState? State;
+
+            public static readonly WaitCallback Callback = static s =>
+            {
+                var item = (ActionWorkItem<TState>)s!;
+                var act = item.Action;
+                var st = item.State;
+                item.Action = null;
+                item.State = default;
+                ActionWorkItemPool<TState>.Return(item);
+                act?.Invoke(st!);
+            };
+        }
+
+        private static class ActionWorkItemPool<TState>
+        {
+            private static ActionWorkItem<TState>? s_fast;
+            private static readonly System.Collections.Generic.Queue<ActionWorkItem<TState>> s_pool = new System.Collections.Generic.Queue<ActionWorkItem<TState>>();
+
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+            public static ActionWorkItem<TState> Rent(Action<TState> action, TState state)
+            {
+                var item = Interlocked.Exchange(ref s_fast, null);
+                if (item == null)
+                {
+                    lock (s_pool)
+                    {
+                        if (s_pool.Count > 0) item = s_pool.Dequeue();
+                    }
+                }
+                item ??= new ActionWorkItem<TState>();
+                item.Action = action;
+                item.State = state;
+                return item;
+            }
+
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+            public static void Return(ActionWorkItem<TState> item)
+            {
+                if (Interlocked.CompareExchange(ref s_fast, item, null) != null)
+                {
+                    lock (s_pool)
+                    {
+                        if (s_pool.Count < 256) s_pool.Enqueue(item);
+                    }
+                }
+            }
+        }
+#endif
     }
 }

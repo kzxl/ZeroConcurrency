@@ -131,8 +131,8 @@ namespace ZeroConcurrency.Tests
                     int totalPacketLen = 8 + bodyLen; // 4 bytes seq + 4 bytes bodyLen + bodyLen
                     byte[] packet = new byte[totalPacketLen];
 
-                    BitConverter.TryWriteBytes(packet.AsSpan(0, 4), seq);
-                    BitConverter.TryWriteBytes(packet.AsSpan(4, 4), bodyLen);
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(packet.AsSpan(0, 4), seq);
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(packet.AsSpan(4, 4), bodyLen);
 
                     byte pattern = (byte)(seq & 0xFF);
                     for (int b = 0; b < bodyLen; b++)
@@ -234,8 +234,8 @@ namespace ZeroConcurrency.Tests
                         // Varied non-power-of-two lengths
                         int bodyLen = 17 + ((producerId + i) % 73);
                         byte[] packet = new byte[8 + bodyLen];
-                        BitConverter.TryWriteBytes(packet.AsSpan(0, 4), producerId);
-                        BitConverter.TryWriteBytes(packet.AsSpan(4, 4), i);
+                        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(packet.AsSpan(0, 4), producerId);
+                        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(packet.AsSpan(4, 4), i);
 
                         var spin = new SpinWait();
                         while (true)
