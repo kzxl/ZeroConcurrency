@@ -93,5 +93,73 @@ namespace ZeroPlatform.Concurrency.Tests
             Assert.Equal(expectedSum, totalConsumedSum);
             Assert.True(ring.IsEmpty);
         }
+
+        [Fact]
+        public async Task MPMC64_MultiThreadedProducersAndConsumers_IntegrityPreserved()
+        {
+            const int Producers = 4;
+            const int Consumers = 4;
+            const int ItemsPerProducer = 50_000;
+            const int TotalExpectedItems = Producers * ItemsPerProducer;
+
+            var ring = new ZeroMpmcRingBuffer64<int>(2048);
+            long totalConsumedSum = 0;
+            int totalConsumedCount = 0;
+
+            long expectedSum = 0;
+            for (int p = 0; p < Producers; p++)
+            {
+                for (int i = 1; i <= ItemsPerProducer; i++)
+                {
+                    expectedSum += i;
+                }
+            }
+
+            var consumerTasks = new Task[Consumers];
+            for (int c = 0; c < Consumers; c++)
+            {
+                consumerTasks[c] = Task.Run(() =>
+                {
+                    SpinWait spinner = default;
+                    while (Volatile.Read(ref totalConsumedCount) < TotalExpectedItems)
+                    {
+                        if (ring.TryDequeue(out int val))
+                        {
+                            Interlocked.Add(ref totalConsumedSum, val);
+                            Interlocked.Increment(ref totalConsumedCount);
+                            spinner.Reset();
+                        }
+                        else
+                        {
+                            spinner.SpinOnce();
+                        }
+                    }
+                });
+            }
+
+            var producerTasks = new Task[Producers];
+            for (int p = 0; p < Producers; p++)
+            {
+                producerTasks[p] = Task.Run(() =>
+                {
+                    SpinWait spinner = default;
+                    for (int i = 1; i <= ItemsPerProducer; i++)
+                    {
+                        while (!ring.TryEnqueue(i))
+                        {
+                            spinner.SpinOnce();
+                        }
+                        spinner.Reset();
+                    }
+                });
+            }
+
+            await Task.WhenAll(producerTasks);
+            await Task.WhenAll(consumerTasks);
+
+            Assert.Equal(TotalExpectedItems, totalConsumedCount);
+            Assert.Equal(expectedSum, totalConsumedSum);
+            Assert.True(ring.IsEmpty);
+        }
     }
 }

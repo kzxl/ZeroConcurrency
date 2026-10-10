@@ -20,6 +20,7 @@ namespace ZeroPlatform.Concurrency
     internal sealed class ZeroWriterPromise<T> : IValueTaskSource<bool>, IValueTaskSource
     {
         public T Item = default!;
+        public CancellationTokenRegistration Registration;
         private ManualResetValueTaskSourceCore<bool> _core;
         private readonly Action<ZeroWriterPromise<T>> _returnToPool;
 
@@ -49,6 +50,8 @@ namespace ZeroPlatform.Concurrency
             }
             finally
             {
+                Registration.Dispose();
+                Registration = default;
                 Item = default!;
                 _core.Reset();
                 _returnToPool(this);
@@ -244,6 +247,80 @@ namespace ZeroPlatform.Concurrency
         }
 
         /// <summary>
+        /// Attempts to write a batch of items synchronously from a <see cref="ReadOnlySpan{T}"/>.
+        /// Acquires the synchronization lock once for the entire batch.
+        /// </summary>
+        /// <param name="items">The items to write.</param>
+        /// <returns>The number of items successfully written.</returns>
+        public int TryWriteBatch(ReadOnlySpan<T> items)
+        {
+            if (items.IsEmpty) return 0;
+
+            lock (_syncObj)
+            {
+                if (_isCompleted) return 0;
+
+                int written = 0;
+                // First satisfy any waiting readers directly
+                while (_waitingReaders.Count > 0 && written < items.Length)
+                {
+                    var reader = _waitingReaders.Dequeue();
+                    reader.SetResult(items[written]);
+                    written++;
+                }
+
+                // If remaining items, write directly to ring buffer in a single batch
+                if (written < items.Length)
+                {
+                    written += _buffer.TryEnqueueBatch(items.Slice(written));
+                }
+
+                return written;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to read a batch of items synchronously into a destination <see cref="Span{T}"/>.
+        /// Acquires the synchronization lock once for the entire batch.
+        /// </summary>
+        /// <param name="destination">The destination span to populate.</param>
+        /// <returns>The number of items successfully read.</returns>
+        public int TryReadBatch(Span<T> destination)
+        {
+            if (destination.IsEmpty) return 0;
+
+            lock (_syncObj)
+            {
+                int read = _buffer.TryDequeueBatch(destination);
+
+                // If buffer is drained and there is still space in destination, drain waiting writers directly
+                while (_waitingWriters.Count > 0 && read < destination.Length)
+                {
+                    var writer = _waitingWriters.Dequeue();
+                    destination[read++] = writer.Item;
+                    writer.SetResult(true);
+                }
+
+                // Refill freed buffer slots from waiting writers
+                while (_waitingWriters.Count > 0)
+                {
+                    var writer = _waitingWriters.Peek();
+                    if (_buffer.TryEnqueue(writer.Item))
+                    {
+                        _waitingWriters.Dequeue();
+                        writer.SetResult(true);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                return read;
+            }
+        }
+
+        /// <summary>
         /// Asynchronously writes an item to the channel (analogous to 'ch &lt;- val' in Go).
         /// Achieves 0-allocation by avoiding compiler async state machine boxing.
         /// </summary>
@@ -281,11 +358,19 @@ namespace ZeroPlatform.Concurrency
 
             if (cancellationToken.CanBeCanceled)
             {
-                cancellationToken.Register(static s =>
+#if NET8_0_OR_GREATER
+                writerPromise.Registration = cancellationToken.UnsafeRegister(static s =>
                 {
                     var p = (ZeroWriterPromise<T>)s!;
                     p.SetException(new OperationCanceledException());
                 }, writerPromise);
+#else
+                writerPromise.Registration = cancellationToken.Register(static s =>
+                {
+                    var p = (ZeroWriterPromise<T>)s!;
+                    p.SetException(new OperationCanceledException());
+                }, writerPromise);
+#endif
             }
 
             return writerPromise.Task;
@@ -328,11 +413,19 @@ namespace ZeroPlatform.Concurrency
 
             if (cancellationToken.CanBeCanceled)
             {
-                cancellationToken.Register(static s =>
+#if NET8_0_OR_GREATER
+                readerPromise.Registration = cancellationToken.UnsafeRegister(static s =>
                 {
                     var p = (ZeroPromise<T>)s!;
                     p.SetException(new OperationCanceledException());
                 }, readerPromise);
+#else
+                readerPromise.Registration = cancellationToken.Register(static s =>
+                {
+                    var p = (ZeroPromise<T>)s!;
+                    p.SetException(new OperationCanceledException());
+                }, readerPromise);
+#endif
             }
 
             return readerPromise.Task;

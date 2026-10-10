@@ -10,7 +10,7 @@ namespace ZeroPlatform.Concurrency
     public sealed class ZeroDedicatedWorker : IDisposable
     {
         private readonly Thread _thread;
-        private readonly Action _workLoop;
+        private readonly Func<bool> _workLoop;
         private volatile bool _isRunning;
         private volatile bool _isDisposed;
 
@@ -22,31 +22,13 @@ namespace ZeroPlatform.Concurrency
         /// <param name="priority">OS thread priority (defaults to <see cref="ThreadPriority.AboveNormal"/> for real-time telemetry).</param>
         public ZeroDedicatedWorker(string name, Func<bool> workLoop, ThreadPriority priority = ThreadPriority.AboveNormal)
         {
-            if (workLoop == null) throw new ArgumentNullException(nameof(workLoop));
+            _workLoop = workLoop ?? throw new ArgumentNullException(nameof(workLoop));
 
             _thread = new Thread(RunLoop)
             {
                 Name = name,
                 IsBackground = true,
                 Priority = priority
-            };
-
-            _workLoop = () =>
-            {
-                SpinWait spinner = default;
-                while (_isRunning)
-                {
-                    bool hasWork = workLoop();
-                    if (hasWork)
-                    {
-                        spinner.Reset();
-                    }
-                    else
-                    {
-                        // Adaptive backoff: lightweight spin -> yield -> sleep 1ms
-                        spinner.SpinOnce();
-                    }
-                }
             };
         }
 
@@ -84,7 +66,20 @@ namespace ZeroPlatform.Concurrency
         {
             try
             {
-                _workLoop();
+                SpinWait spinner = default;
+                while (_isRunning)
+                {
+                    bool hasWork = _workLoop();
+                    if (hasWork)
+                    {
+                        spinner.Reset();
+                    }
+                    else
+                    {
+                        // Adaptive backoff: lightweight spin -> yield -> sleep 1ms
+                        spinner.SpinOnce();
+                    }
+                }
             }
             catch (Exception ex)
             {

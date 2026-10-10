@@ -95,6 +95,11 @@ namespace ZeroPlatform.Concurrency
         }
 
         /// <summary>
+        /// Optional cancellation registration automatically disposed when the promise completes.
+        /// </summary>
+        public CancellationTokenRegistration Registration;
+
+        /// <summary>
         /// Retrieves the result and recycles the instance back to the object pool.
         /// </summary>
         public T GetResult(short token)
@@ -105,6 +110,8 @@ namespace ZeroPlatform.Concurrency
             }
             finally
             {
+                Registration.Dispose();
+                Registration = default;
                 _completedState = 0;
                 _core.Reset();
                 _returnToPool?.Invoke(this);
@@ -199,6 +206,11 @@ namespace ZeroPlatform.Concurrency
         }
 
         /// <summary>
+        /// Optional cancellation registration automatically disposed when the promise completes.
+        /// </summary>
+        public CancellationTokenRegistration Registration;
+
+        /// <summary>
         /// Retrieves the result and recycles the instance back to the object pool.
         /// </summary>
         public void GetResult(short token)
@@ -209,6 +221,8 @@ namespace ZeroPlatform.Concurrency
             }
             finally
             {
+                Registration.Dispose();
+                Registration = default;
                 _completedState = 0;
                 _core.Reset();
                 _returnToPool?.Invoke(this);

@@ -240,5 +240,26 @@ namespace ZeroPlatform.Concurrency.Tests
                 await writerTask;
             });
         }
+
+        [Fact]
+        public void Channel_BatchWriteAndRead_TransfersCorrectly()
+        {
+            var channel = new ZeroChannel<int>(64);
+            int[] data = new int[] { 10, 20, 30, 40, 50, 60, 70, 80 };
+
+            int written = channel.TryWriteBatch(data);
+            Assert.Equal(8, written);
+            Assert.Equal(8, channel.Count);
+
+            Span<int> dest = stackalloc int[8];
+            int read = channel.TryReadBatch(dest);
+            Assert.Equal(8, read);
+            Assert.Equal(0, channel.Count);
+
+            for (int i = 0; i < 8; i++)
+            {
+                Assert.Equal(data[i], dest[i]);
+            }
+        }
     }
 }

@@ -1,10 +1,10 @@
 # ZeroConcurrency
 
 [![ZeroPlatform Tier](https://img.shields.io/badge/ZeroPlatform-Tier%200%20(Core%20Foundation)-0284c7.svg)](https://github.com/kzxl/ZeroPlatform)
-[![NuGet Version](https://img.shields.io/badge/nuget-v1.4.0-blue.svg)](https://www.nuget.org/packages/ZeroConcurrency/)
+[![NuGet Version](https://img.shields.io/badge/nuget-v1.5.0-blue.svg)](https://www.nuget.org/packages/ZeroConcurrency/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET Multi-Targeting](https://img.shields.io/badge/.NET-8.0%20%7C%204.6.2%20%7C%20Standard%202.0-purple.svg)](https://dotnet.microsoft.com/)
-[![Tests: 76 Passed](https://img.shields.io/badge/Tests-76%20Passed%20(100%25)-brightgreen.svg)]()
+[![Tests: 79 Passed](https://img.shields.io/badge/Tests-79%20Passed%20(100%25)-brightgreen.svg)]()
 [![Zero External Dependencies](https://img.shields.io/badge/Dependencies-0%20(Pure%20C%23)-brightgreen.svg)]()
 
 **ZeroConcurrency** is an enterprise-grade, pure C# lock-free concurrency, high-throughput streaming, and asynchronous execution engine for .NET. Engineered with **zero external unmanaged dependencies**, it delivers micro-to-nanosecond latency, zero GC allocations for steady-state workloads, and execution context bypass for mission-critical industrial automation, SCADA, edge IoT, and streaming pipelines.
@@ -113,6 +113,7 @@ ZeroConcurrency/
 └── DataPlane/
     ├── ZeroMmfMpmcQueue.cs       # MemoryMappedFile MPMC Disruptor Queue
     ├── ZeroNativeRingBuffer.cs   # Off-heap Disruptor RingBuffer backed by NativeMemoryPool
+    ├── ZeroMpmcRingBuffer64.cs   # 64-bit sequence lock-free MPMC queue (non-wrapping)
     ├── ZeroMpmcRingBuffer.cs     # Lock-free MPMC queue
     └── ZeroRingBuffer.cs         # Lock-free SPSC cache-line padded ring
 ```
@@ -123,6 +124,7 @@ ZeroConcurrency/
 
 | Version | Release Date | Key Milestones & Highlights |
 | :--- | :---: | :--- |
+| **`v1.5.0`** | 2026-10-10 | **Concurreny Hardening, Batching Channels & Non-Wrapping 64-bit MPMC**:<br/>• **Wrap-Around Hardening**: Fixed signed integer wrap-around near `int.MaxValue` in `ZeroRingBuffer` using modular difference arithmetic.<br/>• **Deadlock Elimination**: Fixed reader completion unblocking in `ZeroChannel.Complete()` to prevent unclosed hangs.<br/>• **64-bit Sequence MPMC**: Added `ZeroMpmcRingBuffer64<T>` using 64-bit sequence numbers for multi-year non-stop streaming with 0 overflow possibility.<br/>• **Channel Batching**: Added `TryWriteBatch` and `TryReadBatch` to `ZeroChannel<T>` for single-lock multi-item throughput.<br/>• **Cancellation Cleanup**: Added auto-disposal of `CancellationTokenRegistration` and `UnsafeRegister` on modern .NET to prevent leaking callbacks on long-lived tokens.<br/>• **Zero-Alloc Legacy Scheduling**: Added pooled generic `ActionWorkItem<TState>` for .NET Framework 4.6.2 in `ZeroScheduler`.<br/>• **Closure Elimination**: Removed delegate closures in `ZeroDedicatedWorker`.<br/>• **Multi-Target CI Harness**: Added polyfills and full `net8.0;net462` automated test execution (79/79 tests passing, 100% success rate). |
 | **`v1.4.0`** | 2026-09-29 | **Durable Lock-Free Disruptor & Cross-Process IPC MPMC**:<br/>• Added `ZeroMmfMpmcQueue<T>`: Lock-free high-throughput Multi-Producer Multi-Consumer queue backed by Memory-Mapped Files (MMF).<br/>• Monotonic sequence barriers for contention mitigation, cache-line aligned structures, and zero GC allocation streaming.<br/>• 76 unit tests passing (100% success rate). |
 | **`v1.2.0`** | 2026-09-22 | **Tier 0 Concurrency Hardening & Off-Heap Disruptor**:<br/>• Integrated with `ZeroPrimitives.Core 1.3.0` off-heap foundation.<br/>• Added `ZeroNativeRingBuffer`: Off-heap Disruptor RingBuffer managing unmanaged memory blocks with 0 GC overhead.<br/>• Added `AsyncManualResetEvent` & `AsyncAutoResetEvent`: Zero-allocation awaitable synchronization primitives.<br/>• Added `ZeroWorkStealingPool`: Dedicated multi-threaded worker pool with work stealing.<br/>• Verified across 31 automated tests (100% pass rate). |
 | **`v1.1.0`** | 2026-09-16 | **MPMC Ring Buffers & Go Channels**:<br/>• Added `ZeroMpmcRingBuffer<T>` lock-free multi-producer multi-consumer ring.<br/>• Added `ZeroChannel<T>` CSP channels with async iterator streaming.<br/>• Added `ZeroDedicatedWorker` pinned thread loop. |
